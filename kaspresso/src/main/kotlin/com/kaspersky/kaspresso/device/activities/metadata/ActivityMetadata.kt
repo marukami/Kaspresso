@@ -5,8 +5,8 @@ import android.content.res.Resources
 import android.view.View
 import android.widget.TextView
 import androidx.test.espresso.util.TreeIterables
-import com.google.android.material.appbar.CollapsingToolbarLayout
 import com.kaspersky.kaspresso.logger.UiTestLogger
+import java.lang.reflect.Method
 
 /**
  * The utility class to collect metadata from a window.
@@ -51,7 +51,7 @@ internal class ActivityMetadata(
     private fun getLocalizedStrings(decorView: View): List<LocalizedString> {
         return TreeIterables.depthFirstViewTraversal(decorView)
             .filter { it.visibility == View.VISIBLE }
-            .filter { it is TextView || it is CollapsingToolbarLayout }
+            .filter { it is TextView || it.isCollapsingToolbarLayout() }
             .map { v ->
                 if (v is TextView) {
                     LocalizedString(
@@ -64,7 +64,7 @@ internal class ActivityMetadata(
                     )
                 } else {
                     LocalizedString(
-                        (v as CollapsingToolbarLayout).title.toString(),
+                        collapsingToolbarLayoutTitle(v).toString(),
                         getEntryNameFromLayout(decorView.resources, v),
                         v.left,
                         v.top,
@@ -84,7 +84,7 @@ internal class ActivityMetadata(
         }
     }
 
-    private fun getEntryNameFromLayout(resources: Resources, layout: CollapsingToolbarLayout): String {
+    private fun getEntryNameFromLayout(resources: Resources, layout: View): String {
         return try {
             resources.getResourceEntryName(layout.id)
         } catch (ex: Resources.NotFoundException) {
@@ -108,4 +108,22 @@ internal class ActivityMetadata(
             locString.copy(locValueDescription = "${locString.locValueDescription}$INDEX_SEPARATOR${index + 1}")
         }
     }
+
+    private fun View.isCollapsingToolbarLayout(): Boolean =
+        collapsingToolbarLayoutClassOrNull() == this::class.java
+
+    private fun collapsingToolbarLayoutTitle(obj: Any): CharSequence? =
+        runCatching {
+            val getTitleMethod: Method = obj.javaClass.getDeclaredMethod("getTitle")
+            return if (getTitleMethod.returnType == CharSequence::class.java) {
+                getTitleMethod.invoke(obj) as CharSequence?
+            } else {
+                null
+            }
+        }.getOrNull()
+
+
+    private fun collapsingToolbarLayoutClassOrNull(): Class<*>? = runCatching {
+        Class.forName("com.google.android.material.appbar.CollapsingToolbarLayout")
+    }.getOrNull()
 }
